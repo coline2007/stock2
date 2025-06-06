@@ -1,0 +1,273 @@
+import tkinter as tk
+from tkinter import messagebox
+import random
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+
+class StockMarketSimulator:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Stock Market Simulator")
+        self.root.geometry("1300x700")
+        self.root.configure(bg='#1a1a1a')
+
+        self.balance = 10000
+        self.portfolio = {}
+        self.stock_prices = {
+            "SBUX": [150],
+            "TSLA": [2800],
+            "GOOG": [3400],
+            "AMZN": [700]
+        }
+        self.purchase_points = {
+            "SBUX": [],
+            "TSLA": [],
+            "GOOG": [],
+            "AMZN": []
+        }
+        self.time_index = {
+            "SBUX": list(range(len(self.stock_prices["SBUX"]))),
+            "TSLA": list(range(len(self.stock_prices["TSLA"]))),
+            "GOOG": list(range(len(self.stock_prices["GOOG"]))),
+            "AMZN": list(range(len(self.stock_prices["AMZN"])))
+        }
+
+        self.create_widgets()
+        self.auto_update_prices()
+
+        # 30초 후 트럼프 이벤트 발생
+        self.root.after(30000, self.trump_event)
+        # 40초 후 주가 하락 이벤트 시작
+        self.root.after(40000, self.start_stock_drop)
+
+        # 2분 후 에티오피아 내전 팝업
+        self.root.after(120000, self.ethiopia_civil_war_event)
+        # 2분 10초 후 스타벅스와 아마존 주가 하락 이벤트 시작
+        self.root.after(130000, self.start_stock_drop_ethiopia)
+
+        # 3분 30초 후 애플 전기차 포기 팝업
+        self.root.after(210000, self.apple_abandons_ev_event)
+        # 3분 40초 후 구글, 테슬라, 아마존 주가 상승 이벤트 시작
+        self.root.after(220000, self.start_stock_rise_apple)
+
+        # 4분 30초 후 최종 잔고 표시
+        self.root.after(270000, self.show_final_balance)
+
+    def create_widgets(self):
+        self.balance_label = tk.Label(self.root, text=f"Balance: ${self.balance:.2f}", font=("Arial", 16), bg='#1a1a1a', fg='#ffffff')
+        self.balance_label.grid(row=0, column=0, columnspan=2, pady=10, padx=10, sticky='w')
+
+        self.stock_listbox = tk.Listbox(self.root, font=("Arial", 14), width=40, height=10, selectmode=tk.SINGLE, bg='#333333', fg='#ffffff', bd=0, highlightthickness=0)
+        self.stock_listbox.grid(row=1, column=0, columnspan=2, pady=10, padx=10, sticky='w')
+        for stock in self.stock_prices:
+            self.stock_listbox.insert(tk.END, f"{stock}: ${self.stock_prices[stock][-1]:.2f}")
+        self.stock_listbox.bind("<Double-Button-1>", self.double_click_buy)
+
+        self.buy_button = tk.Button(self.root, text="Buy", command=self.double_click_buy, font=("Arial", 14), width=12, bg='#007acc', fg='#ffffff', bd=0, highlightthickness=0)
+        self.buy_button.grid(row=2, column=0, pady=10, padx=10, sticky='w')
+        self.sell_button = tk.Button(self.root, text="Sell", command=self.double_click_sell, font=("Arial", 14), width=12, bg='#e60000', fg='#ffffff', bd=0, highlightthickness=0)
+        self.sell_button.grid(row=2, column=1, pady=10, padx=10, sticky='w')
+
+        self.portfolio_label = tk.Label(self.root, text="Portfolio:", font=("Arial", 16), bg='#1a1a1a', fg='#ffffff')
+        self.portfolio_label.grid(row=3, column=0, columnspan=2, pady=10, padx=10, sticky='w')
+        self.portfolio_listbox = tk.Listbox(self.root, font=("Arial", 14), width=40, height=10, selectmode=tk.SINGLE, bg='#333333', fg='#ffffff', bd=0, highlightthickness=0)
+        self.portfolio_listbox.grid(row=4, column=0, columnspan=2, pady=10, padx=10, sticky='w')
+        self.portfolio_listbox.bind("<Double-Button-1>", self.double_click_sell)
+
+        self.transaction_label = tk.Label(self.root, text="Transaction History:", font=("Arial", 16), bg='#1a1a1a', fg='#ffffff')
+        self.transaction_label.grid(row=5, column=0, columnspan=2, pady=10, padx=10, sticky='w')
+        self.transaction_listbox = tk.Listbox(self.root, font=("Arial", 14), width=60, height=10, bg='#333333', fg='#ffffff', bd=0, highlightthickness=0)
+        self.transaction_listbox.grid(row=6, column=0, columnspan=2, pady=10, padx=10, sticky='w')
+
+        self.fig, self.axs = plt.subplots(2, 2, figsize=(10, 8))
+        self.fig.patch.set_facecolor('#1a1a1a')
+        self.canvas = FigureCanvasTkAgg(self.fig, master=self.root)
+        self.canvas.get_tk_widget().grid(row=0, column=2, rowspan=7, padx=20)
+
+    def double_click_buy(self, event=None):
+        selected = self.stock_listbox.curselection()
+        if not selected:
+            messagebox.showwarning("Select Stock", "Please select a stock to buy.")
+            return
+        stock = self.stock_listbox.get(selected).split(":")[0]
+        self.open_quantity_window(stock, "buy")
+
+    def double_click_sell(self, event=None):
+        selected = self.portfolio_listbox.curselection()
+        if not selected:
+            messagebox.showwarning("Select Stock", "Please select a stock to sell.")
+            return
+        stock = self.portfolio_listbox.get(selected).split(":")[0]
+        self.open_quantity_window(stock, "sell")
+
+    def open_quantity_window(self, stock, action):
+        def execute_transaction(event=None):
+            quantity = int(quantity_entry.get())
+            if action == "buy":
+                self.execute_buy(stock, quantity)
+            elif action == "sell":
+                self.execute_sell(stock, quantity)
+            quantity_window.destroy()
+
+        quantity_window = tk.Toplevel(self.root)
+        quantity_window.title(f"{action.capitalize()} {stock}")
+        quantity_window.configure(bg='#1a1a1a')
+        tk.Label(quantity_window, text=f"Enter quantity to {action}:", font=("Arial", 14), bg='#1a1a1a', fg='#ffffff').pack(pady=10)
+        quantity_entry = tk.Entry(quantity_window, font=("Arial", 14), bg='#333333', fg='#ffffff')
+        quantity_entry.pack(pady=10)
+        quantity_entry.bind("<Return>", execute_transaction)
+        tk.Button(quantity_window, text="Submit", command=execute_transaction, font=("Arial", 14), bg='#007acc', fg='#ffffff', bd=0, highlightthickness=0).pack(pady=10)
+
+    def execute_buy(self, stock, quantity):
+        price = self.stock_prices[stock][-1] * quantity
+        if self.balance < price:
+            messagebox.showwarning("Insufficient Funds", "You do not have enough funds to buy this stock.")
+            return
+        self.balance -= price
+        if stock in self.portfolio:
+            self.portfolio[stock] += quantity
+        else:
+            self.portfolio[stock] = quantity
+
+        self.purchase_points[stock].append(len(self.stock_prices[stock]) - 1)
+
+        self.update_portfolio()
+        self.update_balance()
+        self.transaction_listbox.insert(tk.END, f"Bought {quantity} shares of {stock} at ${self.stock_prices[stock][-1]:.2f} each")
+
+    def execute_sell(self, stock, quantity):
+        if stock not in self.portfolio or self.portfolio[stock] < quantity:
+            messagebox.showwarning("Insufficient Shares", f"You do not have enough shares of {stock} to sell.")
+            return
+        price = self.stock_prices[stock][-1] * quantity
+        self.balance += price
+        self.portfolio[stock] -= quantity
+        if self.portfolio[stock] == 0:
+            del self.portfolio[stock]
+
+        for _ in range(quantity):
+            if self.purchase_points[stock]:
+                self.purchase_points[stock].pop(0)
+
+        self.update_portfolio()
+        self.update_balance()
+        self.transaction_listbox.insert(tk.END, f"Sold {quantity} shares of {stock} at ${self.stock_prices[stock][-1]:.2f} each")
+
+    def update_portfolio(self):
+        self.portfolio_listbox.delete(0, tk.END)
+        for stock, qty in self.portfolio.items():
+            self.portfolio_listbox.insert(tk.END, f"{stock}: {qty} shares")
+
+    def update_balance(self):
+        self.balance_label.config(text=f"Balance: ${self.balance:.2f}")
+
+    def update_prices(self):
+        for stock in self.stock_prices:
+            change = random.uniform(-5, 5)
+            new_price = self.stock_prices[stock][-1] + change
+            if new_price < 0:
+                new_price = 0.01
+
+            self.stock_prices[stock].append(new_price)
+
+            if len(self.stock_prices[stock]) > 60:
+                self.stock_prices[stock].pop(0)
+                self.purchase_points[stock] = [p - 1 for p in self.purchase_points[stock] if p > 0]
+                self.time_index[stock].pop(0)
+
+            self.time_index[stock].append(self.time_index[stock][-1] + 1)
+
+        self.stock_listbox.delete(0, tk.END)
+        for stock, prices in self.stock_prices.items():
+            self.stock_listbox.insert(tk.END, f"{stock}: ${prices[-1]:.2f}")
+
+        self.update_graph()
+
+    def update_graph(self):
+        stocks = list(self.stock_prices.keys())
+        for i, stock in enumerate(stocks):
+            ax = self.axs[i // 2, i % 2]
+            ax.clear()
+            ax.plot(self.time_index[stock], self.stock_prices[stock], label=stock)
+            ax.set_title(stock, color='white')
+            ax.grid(True, linestyle='--', color='gray')
+
+            if len(self.stock_prices[stock]) >= 60:
+                recent_prices = self.stock_prices[stock][-60:]
+                ax.set_xlim([self.time_index[stock][-60], self.time_index[stock][-1]])
+            else:
+                recent_prices = self.stock_prices[stock]
+                ax.set_xlim([self.time_index[stock][0], self.time_index[stock][-1]])
+
+            ax.set_ylim([min(recent_prices), max(recent_prices)])
+
+            ax.set_facecolor('#1a1a1a')
+            ax.set(xlabel='Time', ylabel='Price')
+            ax.label_outer()
+            ax.tick_params(axis='x', colors='white')
+            ax.tick_params(axis='y', colors='white')
+
+            for point in self.purchase_points[stock]:
+                if point >= len(self.time_index[stock]) - 60:
+                    ax.plot(self.time_index[stock][point], self.stock_prices[stock][point], 'ro')
+
+        self.canvas.draw()
+
+    def auto_update_prices(self):
+        self.update_prices()
+        self.root.after(500, self.auto_update_prices)
+
+    def trump_event(self):
+        # 팝업 메시지 띄우기 (한국어)
+        messagebox.showinfo("속보", "트럼프가 당선되어 미국이 가입된 세계 기후 협약에서 상당수가 탈퇴되었습니다!")
+
+    def start_stock_drop(self):
+        # 주가 1% 하락
+        def drop_prices():
+            for stock in ["GOOG", "TSLA", "AMZN"]:
+                self.stock_prices[stock][-1] *= 0.99  # 1% 감소
+            self.update_prices()
+
+        # 5초간 1% 하락
+        for i in range(5):
+            self.root.after(1000 * i, drop_prices)
+
+    def ethiopia_civil_war_event(self):
+        # 2분 후 팝업 메시지 띄우기 (한국어)
+        messagebox.showinfo("속보", "에티오피아에 내전이 발발하였습니다.")
+
+    def start_stock_drop_ethiopia(self):
+        # 스타벅스와 아마존 주가 1% 하락
+        def drop_prices():
+            for stock in ["SBUX", "AMZN"]:
+                self.stock_prices[stock][-1] *= 0.99  # 1% 감소
+            self.update_prices()
+
+        # 5초간 1% 하락
+        for i in range(5):
+            self.root.after(1000 * i, drop_prices)
+
+    def apple_abandons_ev_event(self):
+        # 3분 30초 후 팝업 메시지 띄우기 (한국어)
+        messagebox.showinfo("속보", "애플이 전기차 생산을 포기했습니다.")
+
+    def start_stock_rise_apple(self):
+        # 구글, 테슬라, 아마존 주가 1.5% 상승
+        def rise_prices():
+            for stock in ["GOOG", "TSLA", "AMZN"]:
+                self.stock_prices[stock][-1] *= 1.015  # 1.5% 증가
+            self.update_prices()
+
+        # 5초간 1.5% 상승
+        for i in range(5):
+            self.root.after(1000 * i, rise_prices)
+
+    def show_final_balance(self):
+        # 최종 잔고 표시
+        final_balance_label = tk.Label(self.root, text=f"Final Balance: ${self.balance:.2f}", font=("Arial", 48, "bold"), bg='#1a1a1a', fg='#ffffff')
+        final_balance_label.place(relx=0.5, rely=0.5, anchor='center')
+
+# GUI 실행
+root = tk.Tk()
+app = StockMarketSimulator(root)
+root.mainloop()
